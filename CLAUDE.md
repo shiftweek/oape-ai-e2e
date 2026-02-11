@@ -1,6 +1,6 @@
 # CLAUDE.md - OAPE AI E2E Feature Development
 
-This document provides context for Claude Code to work with the OAPE AI E2E Feature Development tools.
+This document provides context for Claude to work with the OAPE AI E2E Feature Development tools.
 
 ## Purpose
 
