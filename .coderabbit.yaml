@@ -1,0 +1,31 @@
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  commit_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  poem: false
+  suggested_labels: false
+  auto_review:
+    enabled: true
+    drafts: true
+  path_filters:
+    - "!**/vendor/**"
+    - "!vendor/**"
+  tools:
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - AGENTS.md
