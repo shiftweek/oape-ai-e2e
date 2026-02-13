@@ -11,6 +11,7 @@ Endpoint:
 
 import os
 import re
+import json
 from pathlib import Path
 
 import anyio
@@ -23,9 +24,15 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
+
+with open("config.json") as cf:
+    config_json_str = cf.read()
+CONFIGS = json.loads(config_json_str)
+
+
 app = FastAPI(
-    title="OAPE API Implement",
-    description="Invokes the /oape:api-implement Claude Code skill to generate "
+    title="OAPE Operator Feature Developer",
+    description="Invokes the /oape:api-implement Claude Code command to generate "
     "controller/reconciler code from an OpenShift enhancement proposal.",
     version="0.1.0",
 )
@@ -35,7 +42,9 @@ EP_URL_PATTERN = re.compile(
 )
 
 # Resolve the plugin directory (repo root) relative to this file.
-PLUGIN_DIR = str(Path(__file__).resolve().parent.parent)
+# The SDK expects the path to the plugin root (containing .claude-plugin/).
+PLUGIN_DIR = str(Path(__file__).resolve().parent.parent / "plugins" / "oape")
+print(PLUGIN_DIR)
 
 
 @app.get("/api-implement")
@@ -75,22 +84,12 @@ async def api_implement(
     options = ClaudeAgentOptions(
         system_prompt=(
             "You are an OpenShift operator code generation assistant. "
-            "Execute the /oape:api-implement skill with the provided EP URL. "
-            "Generate production-ready controller code with zero TODOs."
+            "Execute the oape:api-implement plugin with the provided EP URL. "
         ),
         cwd=working_dir,
         permission_mode="bypassPermissions",
-        allowed_tools=[
-            "Bash",
-            "Read",
-            "Write",
-            "Edit",
-            "Glob",
-            "Grep",
-            "WebFetch",
-            "Task",
-        ],
-        plugins=[PLUGIN_DIR],
+        allowed_tools=CONFIGS['claude_allowed_tools'],
+        plugins=[{"type": "local", "path": PLUGIN_DIR}],
     )
 
     # --- Run the agent ---
@@ -100,6 +99,7 @@ async def api_implement(
     try:
         async for message in query(
             prompt=f"/oape:api-implement {ep_url}",
+            # prompt="explain the enhancement proposal to me like I'm 5 in 10 sentences, {ep_url}",
             options=options,
         ):
             if isinstance(message, AssistantMessage):
@@ -108,6 +108,8 @@ async def api_implement(
                         output_parts.append(block.text)
             elif isinstance(message, ResultMessage):
                 cost_usd = message.total_cost_usd
+                if message.result:
+                    output_parts.append(message.result)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
