@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/python-312
+FROM registry.access.redhat.com/ubi9/go-toolset
 
 # Install system dependencies required by operator tooling
 USER 0
