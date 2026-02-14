@@ -8,16 +8,19 @@ Endpoints:
     GET  /                                    - Homepage with submission form
     POST /submit                              - Submit a job (returns job_id)
     GET  /status/{job_id}                     - Poll job status
+    GET  /stream/{job_id}                     - SSE stream of agent conversation
     GET  /api/v1/oape-api-implement?ep_url=.. - Synchronous API-implement endpoint
 """
 
 import asyncio
+import json
 import os
 import re
 import uuid
 
 from fastapi import FastAPI, HTTPException, Query, Form
 from fastapi.responses import HTMLResponse
+from sse_starlette.sse import EventSourceResponse
 
 from agent import run_agent, SUPPORTED_COMMANDS
 
@@ -72,7 +75,7 @@ HOMEPAGE_HTML = """\
   body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5;
          display: flex; justify-content: center; padding: 40px 16px; }
   .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.1);
-          padding: 32px; max-width: 640px; width: 100%; }
+          padding: 32px; max-width: 720px; width: 100%; }
   h1 { font-size: 1.4rem; margin-bottom: 4px; }
   p.sub { color: #666; font-size: .9rem; margin-bottom: 24px; }
   label { display: block; font-weight: 600; margin-bottom: 6px; font-size: .9rem; }
@@ -88,11 +91,29 @@ HOMEPAGE_HTML = """\
              vertical-align: middle; margin-right: 8px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   #status { margin-top: 20px; font-size: .9rem; color: #555; }
+  #conversation { margin-top: 16px; background: #fafafa; border: 1px solid #e0e0e0;
+                  border-radius: 6px; max-height: 500px; overflow-y: auto;
+                  display: none; }
+  #conversation .msg { padding: 10px 14px; border-bottom: 1px solid #eee;
+                       font-size: .85rem; line-height: 1.5; }
+  #conversation .msg:last-child { border-bottom: none; }
+  .msg-text { color: #333; }
+  .msg-text .label { font-weight: 600; color: #4a90d9; margin-right: 6px; }
+  .msg-tool { color: #8B6914; background: #FFF8E7; font-family: monospace; font-size: .82rem; }
+  .msg-tool-result { color: #555; background: #f5f5f5; font-family: monospace;
+                     font-size: .82rem; white-space: pre-wrap; word-break: break-word; }
+  .msg-thinking { color: #7B1FA2; background: #F3E5F5; font-style: italic; }
+  .msg-result { color: #2E7D32; background: #E8F5E9; font-weight: 600; }
+  .msg-other { color: #888; font-size: .8rem; }
   #output { margin-top: 16px; background: #1e1e1e; color: #d4d4d4;
             padding: 16px; border-radius: 6px; font-family: monospace;
             font-size: .85rem; white-space: pre-wrap; word-break: break-word;
             max-height: 500px; overflow-y: auto; display: none; }
   .error { color: #c0392b; }
+  .content-preview { max-height: 120px; overflow: hidden; position: relative; }
+  .content-preview.expanded { max-height: none; }
+  .toggle-expand { color: #4a90d9; cursor: pointer; font-size: .8rem;
+                   display: inline-block; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -112,13 +133,26 @@ HOMEPAGE_HTML = """\
     <button type="submit" id="submitBtn">Generate</button>
   </form>
   <div id="status"></div>
+  <div id="conversation"></div>
   <pre id="output"></pre>
 </div>
 <script>
 const form     = document.getElementById('epForm');
 const btn      = document.getElementById('submitBtn');
 const statusEl = document.getElementById('status');
+const convEl   = document.getElementById('conversation');
 const outputEl = document.getElementById('output');
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function truncate(str, maxLen) {
+  if (!str) return '';
+  return str.length <= maxLen ? str : str.substring(0, maxLen) + '\\u2026';
+}
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -130,7 +164,9 @@ form.addEventListener('submit', async (e) => {
   btn.disabled = true;
   outputEl.style.display = 'none';
   outputEl.textContent = '';
-  statusEl.innerHTML = '<span class="spinner"></span> Submitting job\u2026';
+  convEl.style.display = 'none';
+  convEl.innerHTML = '';
+  statusEl.innerHTML = '<span class="spinner"></span> Submitting job\\u2026';
 
   try {
     const body = new URLSearchParams({ep_url: epUrl, command: command});
@@ -138,39 +174,98 @@ form.addEventListener('submit', async (e) => {
     const res = await fetch('/submit', {method: 'POST', body});
     if (!res.ok) { throw new Error((await res.json()).detail || res.statusText); }
     const {job_id} = await res.json();
-    statusEl.innerHTML = '<span class="spinner"></span> Running agent\u2026 (polling for results)';
-    pollJob(job_id);
+    statusEl.innerHTML = '<span class="spinner"></span> Connecting to agent stream\\u2026';
+    streamJob(job_id);
   } catch (err) {
-    statusEl.innerHTML = '<span class="error">Error: ' + err.message + '</span>';
+    statusEl.innerHTML = '<span class="error">Error: ' + escapeHtml(err.message) + '</span>';
     btn.disabled = false;
   }
 });
 
-function pollJob(jobId) {
-  const iv = setInterval(async () => {
-    try {
-      const res = await fetch('/status/' + jobId);
-      if (!res.ok) { throw new Error((await res.json()).detail || res.statusText); }
-      const data = await res.json();
-      if (data.status === 'running') {
-        statusEl.innerHTML = '<span class="spinner"></span> Agent is working\u2026';
-        return;
-      }
-      clearInterval(iv);
-      btn.disabled = false;
-      if (data.status === 'success') {
-        statusEl.innerHTML = 'Done! Cost: $' + (data.cost_usd || 0).toFixed(4);
-        outputEl.textContent = data.output;
+function streamJob(jobId) {
+  const es = new EventSource('/stream/' + jobId);
+
+  es.addEventListener('message', (e) => {
+    const msg = JSON.parse(e.data);
+    convEl.style.display = 'block';
+    appendMessage(msg);
+    updateStatus(msg);
+  });
+
+  es.addEventListener('complete', (e) => {
+    const result = JSON.parse(e.data);
+    es.close();
+    btn.disabled = false;
+
+    if (result.status === 'success') {
+      statusEl.innerHTML = 'Done! Cost: $' + (result.cost_usd || 0).toFixed(4);
+      if (result.output) {
+        outputEl.textContent = result.output;
         outputEl.style.display = 'block';
-      } else {
-        statusEl.innerHTML = '<span class="error">Failed: ' + (data.error || 'unknown error') + '</span>';
       }
-    } catch (err) {
-      clearInterval(iv);
-      btn.disabled = false;
-      statusEl.innerHTML = '<span class="error">Polling error: ' + err.message + '</span>';
+    } else {
+      statusEl.innerHTML = '<span class="error">Failed: '
+        + escapeHtml(result.error || 'unknown error') + '</span>';
     }
-  }, 3000);
+  });
+
+  es.addEventListener('error', () => {
+    es.close();
+    btn.disabled = false;
+    if (statusEl.querySelector('.spinner')) {
+      statusEl.innerHTML = '<span class="error">Stream connection lost</span>';
+    }
+  });
+}
+
+function appendMessage(msg) {
+  const div = document.createElement('div');
+  div.className = 'msg';
+
+  if (msg.type === 'assistant' && msg.block_type === 'text') {
+    div.classList.add('msg-text');
+    div.innerHTML = '<span class="label">Assistant</span>'
+      + escapeHtml(msg.content);
+  } else if (msg.type === 'assistant' && msg.block_type === 'tool_use') {
+    div.classList.add('msg-tool');
+    const inputPreview = truncate(JSON.stringify(msg.tool_input), 200);
+    div.innerHTML = '&#9881; <b>' + escapeHtml(msg.tool_name) + '</b> '
+      + '<span style="color:#aaa">' + escapeHtml(inputPreview) + '</span>';
+  } else if (msg.type === 'assistant' && msg.block_type === 'tool_result') {
+    div.classList.add('msg-tool-result');
+    const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    const preview = truncate(content, 500);
+    const prefix = msg.is_error ? '&#10060; ' : '&#10004; ';
+    div.innerHTML = prefix + escapeHtml(preview);
+  } else if (msg.type === 'assistant' && msg.block_type === 'thinking') {
+    div.classList.add('msg-thinking');
+    div.textContent = 'Thinking\\u2026';
+  } else if (msg.type === 'result') {
+    div.classList.add('msg-result');
+    div.textContent = 'Result received (cost: $'
+      + (msg.cost_usd || 0).toFixed(4) + ')';
+  } else {
+    div.classList.add('msg-other');
+    div.textContent = '[' + (msg.type || 'event') + '] '
+      + truncate(msg.content || '', 100);
+  }
+
+  convEl.appendChild(div);
+  convEl.scrollTop = convEl.scrollHeight;
+}
+
+function updateStatus(msg) {
+  if (msg.type === 'assistant' && msg.block_type === 'text') {
+    statusEl.innerHTML = '<span class="spinner"></span> '
+      + escapeHtml(truncate(msg.content, 80));
+  } else if (msg.type === 'assistant' && msg.block_type === 'tool_use') {
+    statusEl.innerHTML = '<span class="spinner"></span> Running: '
+      + escapeHtml(msg.tool_name) + '\\u2026';
+  } else if (msg.type === 'assistant' && msg.block_type === 'thinking') {
+    statusEl.innerHTML = '<span class="spinner"></span> Agent is thinking\\u2026';
+  } else if (msg.type === 'result') {
+    statusEl.innerHTML = '<span class="spinner"></span> Finalizing\\u2026';
+  }
 }
 </script>
 </body>
@@ -201,7 +296,16 @@ async def submit_job(
     working_dir = _resolve_working_dir(cwd)
 
     job_id = uuid.uuid4().hex[:12]
-    jobs[job_id] = {"status": "running", "ep_url": ep_url, "cwd": working_dir}
+    jobs[job_id] = {
+        "status": "running",
+        "ep_url": ep_url,
+        "cwd": working_dir,
+        "conversation": [],
+        "message_event": asyncio.Condition(),
+        "output": "",
+        "cost_usd": 0.0,
+        "error": None,
+    }
     asyncio.create_task(_run_job(job_id, command, ep_url, working_dir))
     return {"job_id": job_id}
 
@@ -211,27 +315,90 @@ async def job_status(job_id: str):
     """Return the current status of a job."""
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
-    return jobs[job_id]
+    job = jobs[job_id]
+    return {
+        "status": job["status"],
+        "ep_url": job["ep_url"],
+        "cwd": job["cwd"],
+        "output": job.get("output", ""),
+        "cost_usd": job.get("cost_usd", 0.0),
+        "error": job.get("error"),
+        "message_count": len(job.get("conversation", [])),
+    }
+
+
+@app.get("/stream/{job_id}")
+async def stream_job(job_id: str):
+    """Stream job conversation messages via Server-Sent Events."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    async def event_generator():
+        cursor = 0
+        condition = jobs[job_id]["message_event"]
+
+        while True:
+            # Send any new messages since the cursor
+            conversation = jobs[job_id]["conversation"]
+            while cursor < len(conversation):
+                yield {
+                    "event": "message",
+                    "data": json.dumps(conversation[cursor], default=str),
+                }
+                cursor += 1
+
+            # Check if the job is complete
+            status = jobs[job_id]["status"]
+            if status != "running":
+                yield {
+                    "event": "complete",
+                    "data": json.dumps({
+                        "status": status,
+                        "output": jobs[job_id].get("output", ""),
+                        "cost_usd": jobs[job_id].get("cost_usd", 0.0),
+                        "error": jobs[job_id].get("error"),
+                    }),
+                }
+                return
+
+            # Wait for new messages or send keepalive on timeout
+            async with condition:
+                try:
+                    await asyncio.wait_for(condition.wait(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    yield {"event": "keepalive", "data": ""}
+
+    return EventSourceResponse(event_generator())
 
 
 async def _run_job(job_id: str, command: str, ep_url: str, working_dir: str):
-    """Run the Claude agent in the background and update the job store."""
-    result = await run_agent(command, ep_url, working_dir)
+    """Run the Claude agent in the background and stream messages to the job store."""
+    condition = jobs[job_id]["message_event"]
+
+    loop = asyncio.get_running_loop()
+
+    def on_message(msg: dict) -> None:
+        jobs[job_id]["conversation"].append(msg)
+        loop.create_task(_notify(condition))
+
+    result = await run_agent(command, ep_url, working_dir, on_message=on_message)
     if result.success:
-        jobs[job_id] = {
-            "status": "success",
-            "ep_url": ep_url,
-            "cwd": working_dir,
-            "output": result.output,
-            "cost_usd": result.cost_usd,
-        }
+        jobs[job_id]["status"] = "success"
+        jobs[job_id]["output"] = result.output
+        jobs[job_id]["cost_usd"] = result.cost_usd
     else:
-        jobs[job_id] = {
-            "status": "failed",
-            "ep_url": ep_url,
-            "cwd": working_dir,
-            "error": result.error,
-        }
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = result.error
+
+    # Final notification so SSE clients see the status change
+    async with condition:
+        condition.notify_all()
+
+
+async def _notify(condition: asyncio.Condition) -> None:
+    """Notify all waiters on the condition."""
+    async with condition:
+        condition.notify_all()
 
 
 @app.get("/api/v1/oape-api-implement")

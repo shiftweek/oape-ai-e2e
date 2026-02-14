@@ -5,6 +5,7 @@ Core agent execution logic shared between sync and async endpoints.
 import json
 import logging
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -14,6 +15,9 @@ from claude_agent_sdk import (
     AssistantMessage,
     ResultMessage,
     TextBlock,
+    ThinkingBlock,
+    ToolUseBlock,
+    ToolResultBlock,
 )
 
 # Resolve the plugin directory (repo root) relative to this file.
@@ -54,6 +58,7 @@ async def run_agent(
     command: str,
     ep_url: str,
     working_dir: str,
+    on_message: Callable[[dict], None] | None = None,
 ) -> AgentResult:
     """Run the Claude agent and return the result.
 
@@ -61,6 +66,8 @@ async def run_agent(
         command: The command key (e.g. "api-implement").
         ep_url: The enhancement proposal PR URL.
         working_dir: Absolute path to the operator repo.
+        on_message: Optional callback invoked with each conversation message
+            dict as it arrives, enabling real-time streaming.
 
     Returns:
         An AgentResult with the output or error.
@@ -94,6 +101,12 @@ async def run_agent(
         f"cwd={working_dir}\n{'=' * 60}"
     )
 
+    def _emit(entry: dict) -> None:
+        """Append to conversation and invoke on_message callback if set."""
+        conversation.append(entry)
+        if on_message is not None:
+            on_message(entry)
+
     try:
         async for message in query(
             prompt=f"/{skill_name} {ep_url}",
@@ -103,21 +116,45 @@ async def run_agent(
                 for block in message.content:
                     if isinstance(block, TextBlock):
                         output_parts.append(block.text)
-                        conversation.append(
-                            {"role": "assistant", "content": block.text}
-                        )
+                        entry = {"type": "assistant", "block_type": "text",
+                                 "content": block.text}
+                        _emit(entry)
                         conv_logger.info(f"[assistant] {block.text}")
+                    elif isinstance(block, ThinkingBlock):
+                        entry = {"type": "assistant", "block_type": "thinking",
+                                 "content": block.thinking}
+                        _emit(entry)
+                        conv_logger.info(
+                            f"[assistant:ThinkingBlock] (thinking)")
+                    elif isinstance(block, ToolUseBlock):
+                        entry = {"type": "assistant", "block_type": "tool_use",
+                                 "tool_name": block.name,
+                                 "tool_input": block.input}
+                        _emit(entry)
+                        conv_logger.info(
+                            f"[assistant:ToolUseBlock] {block.name}")
+                    elif isinstance(block, ToolResultBlock):
+                        content = block.content
+                        if not isinstance(content, str):
+                            content = json.dumps(content, default=str)
+                        entry = {"type": "assistant", "block_type": "tool_result",
+                                 "tool_use_id": block.tool_use_id,
+                                 "content": content,
+                                 "is_error": block.is_error or False}
+                        _emit(entry)
+                        conv_logger.info(
+                            f"[assistant:ToolResultBlock] {block.tool_use_id}")
                     else:
                         detail = json.dumps(
                             getattr(block, "__dict__", str(block)),
                             default=str,
                         )
-                        conversation.append(
-                            {
-                                "role": f"assistant:{type(block).__name__}",
-                                "content": detail,
-                            }
-                        )
+                        entry = {
+                            "type": "assistant",
+                            "block_type": type(block).__name__,
+                            "content": detail,
+                        }
+                        _emit(entry)
                         conv_logger.info(
                             f"[assistant:{type(block).__name__}] {detail}"
                         )
@@ -125,13 +162,12 @@ async def run_agent(
                 cost_usd = message.total_cost_usd
                 if message.result:
                     output_parts.append(message.result)
-                conversation.append(
-                    {
-                        "role": "result",
-                        "content": message.result,
-                        "cost_usd": cost_usd,
-                    }
-                )
+                entry = {
+                    "type": "result",
+                    "content": message.result,
+                    "cost_usd": cost_usd,
+                }
+                _emit(entry)
                 conv_logger.info(
                     f"[result] {message.result}  cost=${cost_usd:.4f}"
                 )
@@ -139,9 +175,11 @@ async def run_agent(
                 detail = json.dumps(
                     getattr(message, "__dict__", str(message)), default=str
                 )
-                conversation.append(
-                    {"role": type(message).__name__, "content": detail}
-                )
+                entry = {
+                    "type": type(message).__name__,
+                    "content": detail,
+                }
+                _emit(entry)
                 conv_logger.info(f"[{type(message).__name__}] {detail}")
 
         conv_logger.info(
