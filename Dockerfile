@@ -1,25 +1,23 @@
-FROM registry.access.redhat.com/ubi9/python-312
+FROM registry.access.redhat.com/ubi9/go-toolset
 
 # Install system dependencies required by operator tooling
 USER 0
 RUN dnf install -y \
         git \
         make && \
-    # Install Go toolchain
-    curl -fsSL https://go.dev/dl/go1.23.6.linux-amd64.tar.gz | tar -C /usr/local -xz && \
     # Install GitHub CLI
     dnf install -y 'dnf-command(config-manager)' && \
     dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && \
     dnf install -y gh && \
+    dnf install -y python3.11 && \
+    dnf install -y python3.11-pip && \
     dnf clean all
-
-ENV PATH="/usr/local/go/bin:${PATH}"
 
 WORKDIR /app
 
 # Install Python dependencies
 COPY server/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
 
 # Copy server code and config
 COPY server/server.py server/config.json ./
