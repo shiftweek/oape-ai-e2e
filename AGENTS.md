@@ -47,45 +47,7 @@ make generate && make manifests && make build && make test
 
 ## Supported Operator Repositories
 
-These repositories can be used to test the OAPE commands. Clone any of them and run the commands from within.
-
-### Cert-Manager Operators
-
-| Repository                                                                              | Description                                    | Framework          |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------ |
-| [openshift/cert-manager-operator](https://github.com/openshift/cert-manager-operator)   | Manages cert-manager installation on OpenShift | controller-runtime |
-| [openshift/jetstack-cert-manager](https://github.com/openshift/jetstack-cert-manager)   | Core cert-manager (upstream fork)              | controller-runtime |
-| [openshift/cert-manager-istio-csr](https://github.com/openshift/cert-manager-istio-csr) | Certificate signing for Istio service mesh     | controller-runtime |
-
-### External Secrets Operators
-
-| Repository                                                                                    | Description                           | Framework          |
-| --------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------ |
-| [openshift/external-secrets-operator](https://github.com/openshift/external-secrets-operator) | Manages external-secrets on OpenShift | controller-runtime |
-| [openshift/external-secrets](https://github.com/openshift/external-secrets)                   | Core external-secrets (upstream fork) | controller-runtime |
-
-### Additional Test Repositories
-
-| Repository                                                                                                | Description                                 | Framework          |
-| --------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------ |
-| [openshift/cluster-ingress-operator](https://github.com/openshift/cluster-ingress-operator)               | Good example of controller-runtime patterns | controller-runtime |
-| [openshift/cluster-authentication-operator](https://github.com/openshift/cluster-authentication-operator) | Good example of library-go patterns         | library-go         |
-| [openshift/secrets-store-csi-driver-operator](https://github.com/openshift/secrets-store-csi-driver-operator) | CSI driver operator with bash e2e       | library-go         |
-
----
-
-## Quick Clone Commands
-
-```bash
-# Cert-Manager Operators
-git clone --filter=blob:none https://github.com/openshift/cert-manager-operator.git
-git clone --filter=blob:none https://github.com/openshift/jetstack-cert-manager.git
-git clone --filter=blob:none https://github.com/openshift/cert-manager-istio-csr.git
-
-# External Secrets Operators
-git clone --filter=blob:none https://github.com/openshift/external-secrets-operator.git
-git clone --filter=blob:none https://github.com/openshift/external-secrets.git
-```
+The allowed repositories and their base branches are defined in [`team-repos.csv`](team-repos.csv). DO NOT raise PRs on any repos beyond that list. Always read `team-repos.csv` to determine the correct repo URL and base branch before cloning or creating branches.
 
 ---
 
