@@ -89,26 +89,44 @@ Performs a "Principal Engineer" level code review that verifies code changes aga
 
 ---
 
-### ZTWIM Test Generator (ZTWIM operator PRs only)
+### `/oape:e2e-generate`
 
-Generates test scenarios, execution steps with `oc` commands, and e2e Go code for [openshift/zero-trust-workload-identity-manager](https://github.com/openshift/zero-trust-workload-identity-manager) PRs. Fixtures and docs live under `ztwim-test-generator/`; commands are exposed as `/oape:ztwim-*`.
+Generates e2e test artifacts for any OpenShift operator repository by discovering the repo structure and analyzing the git diff from a base branch.
 
-| Command | Description |
-|---------|-------------|
-| **`/oape:ztwim-generate-all <pr-url>`** | Generate all artifacts in one run: `test-cases.md`, `execution-steps.md`, `<prno>_test_e2e.go`, `e2e-suggestions.md` in `output/ztwim_pr_<number>/`. |
-| `/oape:ztwim-generate-from-pr <pr-url>` | Generate only test scenarios (`test-cases.md`). |
-| `/oape:ztwim-generate-execution-steps <pr-url>` | Generate only execution steps (`execution-steps.md`). |
-| `/oape:ztwim-generate-e2e-from-pr <pr-url>` | Generate only e2e Go code and suggestions. |
+**Usage:**
+```shell
+# Generate e2e tests for changes since main
+/oape:e2e-generate main
 
-See [ztwim-test-generator/README.md](ztwim-test-generator/README.md) for fixtures and usage.
+# Use a specific base branch and custom output directory
+/oape:e2e-generate origin/release-4.18 --output .work
+```
+
+**What it does:**
+1. **Prechecks** -- Validates the base branch argument, required tools (`git`, `go`), repository type (must be an OpenShift operator repo with controller-runtime or library-go), and verifies a non-empty git diff.
+2. **Discovery** -- Detects framework (controller-runtime vs library-go), API types, CRDs, existing e2e test patterns, install mechanism (OLM or manual), operator namespace, and sample CRs.
+3. **Diff Analysis** -- Categorizes changed files (API types, controllers, CRDs, RBAC, samples) and reads diff hunks to understand specific changes.
+4. **Generation** -- Produces four files in `output/e2e_<repo-name>/`:
+   - `test-cases.md` -- Test scenarios with context, prerequisites, install, CR deployment, diff-specific tests, verification, cleanup
+   - `execution-steps.md` -- Step-by-step `oc` commands
+   - `e2e_test.go` or `e2e_test.sh` -- Go (Ginkgo) or bash test code matching the repo's existing e2e pattern
+   - `e2e-suggestions.md` -- Coverage recommendations
+
+**Supports:**
+- controller-runtime operators (Ginkgo e2e) -- e.g., cert-manager-operator, external-secrets-operator
+- library-go operators (bash e2e) -- e.g., secrets-store-csi-driver-operator
+- Operators with in-repo API types or external types from openshift/api
+
+See [e2e-test-generator/](e2e-test-generator/) for fixture templates and pattern documentation.
 
 ## Prerequisites
 
-- **gh** (GitHub CLI) -- installed and authenticated
 - **go** -- Go toolchain
 - **git** -- Git
+- **gh** (GitHub CLI) -- installed and authenticated (for api-generate, api-implement, review)
 - **make** -- Make (for api-implement)
 - **curl** -- For fetching Jira issues (for review)
+- **oc** -- OpenShift CLI (recommended, for running generated execution steps)
 - Must be run from within an OpenShift operator repository
 
 ## Conventions Enforced

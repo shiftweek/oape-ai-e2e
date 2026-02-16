@@ -16,6 +16,7 @@ This project provides AI-driven tools for end-to-end feature development in Open
 | `/oape:api-generate <EP-URL>`             | Generate Go API types from Enhancement Proposal                |
 | `/oape:api-generate-tests <path>`         | Generate integration test suites for API types                 |
 | `/oape:api-implement <EP-URL>`            | Generate controller code from Enhancement Proposal + API types |
+| `/oape:e2e-generate <base-branch>`        | Generate e2e test artifacts from git diff against base branch  |
 | `/oape:review <ticket_id> [base_ref]`     | Production-grade code review against Jira requirements         |
 | `/oape:implement-review-fixes <report>`   | Automatically apply fixes from a review report                 |
 
@@ -36,6 +37,9 @@ cd /path/to/operator-repo
 
 # 5. Build and verify
 make generate && make manifests && make build && make test
+
+# 6. Generate e2e tests for your changes
+/oape:e2e-generate main
 ```
 
 ---
@@ -65,6 +69,7 @@ These repositories can be used to test the OAPE commands. Clone any of them and 
 | --------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------ |
 | [openshift/cluster-ingress-operator](https://github.com/openshift/cluster-ingress-operator)               | Good example of controller-runtime patterns | controller-runtime |
 | [openshift/cluster-authentication-operator](https://github.com/openshift/cluster-authentication-operator) | Good example of library-go patterns         | library-go         |
+| [openshift/secrets-store-csi-driver-operator](https://github.com/openshift/secrets-store-csi-driver-operator) | CSI driver operator with bash e2e       | library-go         |
 
 ---
 
