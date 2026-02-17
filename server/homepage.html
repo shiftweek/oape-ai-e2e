@@ -120,18 +120,28 @@ const prListEl  = document.getElementById('prList');
 const prItemsEl = document.getElementById('prItems');
 const repoSelect = document.getElementById('repo');
 
-// Fetch available repositories on page load
+// Fetch available repositories on page load, grouped by product
 async function loadRepos() {
   try {
     const res = await fetch('/repos');
     if (res.ok) {
       const data = await res.json();
+      // Group repositories by product
+      const groups = {};
       data.repositories.forEach(repo => {
-        const option = document.createElement('option');
-        option.value = repo.short_name;
-        option.textContent = `${repo.short_name} (${repo.base_branch})`;
-        option.title = `${repo.product} - ${repo.role}`;
-        repoSelect.appendChild(option);
+        if (!groups[repo.product]) groups[repo.product] = [];
+        groups[repo.product].push(repo);
+      });
+      Object.entries(groups).forEach(([product, repos]) => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = product;
+        repos.forEach(repo => {
+          const option = document.createElement('option');
+          option.value = repo.short_name;
+          option.textContent = `${repo.short_name} — ${repo.role} (${repo.base_branch})`;
+          optgroup.appendChild(option);
+        });
+        repoSelect.appendChild(optgroup);
       });
     }
   } catch (err) {
