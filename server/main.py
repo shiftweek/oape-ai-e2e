@@ -263,38 +263,31 @@ HOMEPAGE_HTML = """
 <body>
     <div class="container">
         <header>
-            <h1><span>OAPE</span> Operator Feature Developer</h1>
-            <p class="subtitle">AI-driven tools for OpenShift operator development</p>
+            <h1>OAPE Operator Feature Developer</h1>
+            <p class="subtitle">Generate controller code from an OpenShift Enhancement Proposal</p>
         </header>
         
         <form id="commandForm">
             <div class="form-group">
                 <label for="command">Command</label>
                 <select id="command" name="command" required>
-                    <option value="api-implement">api-implement - Generate controller code</option>
-                    <option value="api-generate">api-generate - Generate API types</option>
-                    <option value="api-generate-tests">api-generate-tests - Generate API tests</option>
-                    <option value="e2e-generate">e2e-generate - Generate e2e tests</option>
-                    <option value="init">init - Clone operator repository</option>
-                    <option value="review">review - Code review against Jira</option>
+                    <option value="api-implement" selected>api-implement</option>
                 </select>
             </div>
             
             <div class="form-group">
-                <label for="prompt">Prompt / Arguments</label>
-                <textarea id="prompt" name="prompt" required
-                    placeholder="e.g., https://github.com/openshift/enhancements/pull/1234"></textarea>
-                <p class="help-text">Enter the command arguments (EP URL, path, ticket ID, etc.)</p>
+                <label for="prompt">Enhancement Proposal PR URL</label>
+                <input type="text" id="prompt" name="prompt" required
+                    placeholder="https://github.com/openshift/enhancements/pull/1234">
             </div>
             
             <div class="form-group">
-                <label for="working_dir">Working Directory</label>
+                <label for="working_dir">Working Directory <span style="color: var(--text-muted);">(optional)</span></label>
                 <input type="text" id="working_dir" name="working_dir"
-                    placeholder="/path/to/operator/repo">
-                <p class="help-text">Leave empty to use server's current directory</p>
+                    placeholder="/path/to/operator-repo">
             </div>
             
-            <button type="submit" id="submitBtn">Run Command</button>
+            <button type="submit" id="submitBtn">Generate</button>
             <span id="statusBadge" style="margin-left: 1rem;"></span>
         </form>
         
