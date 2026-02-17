@@ -67,7 +67,7 @@ class VertexClient:
         self,
         project_id: str | None = None,
         region: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str | None = None,
         max_tokens: int = 8192,
     ):
         """
@@ -76,12 +76,12 @@ class VertexClient:
         Args:
             project_id: GCP project ID. Defaults to ANTHROPIC_VERTEX_PROJECT_ID env var.
             region: GCP region. Defaults to CLOUD_ML_REGION env var.
-            model: Model name. Defaults to claude-sonnet-4-20250514.
+            model: Model name. Defaults to ANTHROPIC_MODEL env var or claude-3-5-sonnet-v2@20241022.
             max_tokens: Maximum tokens in response.
         """
         self.project_id = project_id or os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID")
         self.region = region or os.environ.get("CLOUD_ML_REGION", "us-east5")
-        self.model = model
+        self.model = model or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-v2@20241022")
         self.max_tokens = max_tokens
 
         if not self.project_id:
