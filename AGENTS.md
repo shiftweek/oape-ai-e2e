@@ -64,7 +64,17 @@ The commands automatically detect which framework the repository uses:
 
 ## Project Structure
 
-
+```
+oape-ai-e2e/
+├── AGENTS.md               # This file - AI agent instructions
+├── team-repos.csv          # Allowed operator repositories
+├── plugins/oape/           # Command and skill definitions
+│   ├── commands/           # Slash command implementations
+│   ├── skills/             # Reusable knowledge modules
+│   └── e2e-test-generator/ # Fixtures and examples
+├── server/                 # FastAPI server (Vertex AI)
+└── deploy/                 # Kubernetes deployment
+```
 
 ---
 
