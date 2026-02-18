@@ -37,23 +37,46 @@ From the description (strip Jira wiki markup), extract:
 - **Nature/Description** — what is being requested
 - **Current Limitation** — what doesn’t work today
 - **Desired Behavior** — what should happen (bullets/paragraphs)
-- **Use Case** — how customers will use it
+- **Use Case** — intended usage and scenarios
 - **Business Requirements** — impact, justification
 - **Affected Components** — teams, operators (from description and Jira components)
 
 Note missing sections; still proceed with available content.
 
-## Step 3: Gather Workspace Context (Optional)
+## Step 3: Gather Component Context and Historic PR Analysis (Required)
 
-1. Search workspace for `**/context.md` or `**/component-context/**/context.md`.
-2. For components mentioned in the RFE, try to match context files (by component name, aliases, or path).
-3. Read matching files; extract Purpose, Scope, Out of Scope, Key Technical Areas, Related Components.
-4. **Optional — rich context via scripts** (when no context files exist or deeper analysis is needed): Run the component-context gatherer from the skill scripts directory. It uses `fetch_rfe` data, **GitHub PR analysis** (`github_pr_analyzer.py`), repo structure, and optional operand discovery. Prerequisites: `gh` CLI authenticated (`gh auth login`). Example (use RFE-derived keywords for the component):
+1. **Extract component names** from RFE (from Jira components field and description).
+2. **Extract keywords** from RFE description, summary, and desired behavior for PR search.
+3. **For each affected component**, run the component context gatherer with PR analysis:
    ```bash
-   python3 plugins/oape/skills/analyze-rfe/scripts/gather_component_context.py <component-name> --keywords "keyword1" "keyword2" -o .work/jira/analyze-rfe/<rfe-key>/component-context.md
+   python3 plugins/oape/skills/analyze-rfe/scripts/gather_component_context.py <component-name> \
+     --keywords "keyword1" "keyword2" "keyword3" \
+     --max-prs 50 \
+     --deep-dive 3 \
+     --analyze-upstream \
+     --analyze-operands \
+     -o .work/jira/analyze-rfe/<rfe-key>/component-<component-name>-context.md
    ```
-   Use the generated markdown as "Component Context (from workspace)" in the report. If `gh` is not available or the run fails, fall back to file-based context only.
-5. Use this when generating epics and stories (scope boundaries, key areas, handoffs). If none found, skip this section in the output.
+
+   **What this does**:
+   - Discovers **downstream** repo (e.g., `openshift/cert-manager-operator`)
+   - Discovers **upstream** repo (e.g., `cert-manager/cert-manager`)
+   - Searches for relevant **PRs** using RFE keywords (checks title, body, comments)
+   - Analyzes PR history for **design decisions**, **lessons learned**, **ADRs**
+   - If component is an operator, discovers and analyzes **operand repos**
+   - Caches results to `.work/jira/analyze-rfe/cache/` for performance
+
+   **Prerequisites**: `gh` CLI authenticated (`gh auth login`). If `gh` is not available, log a warning and skip PR analysis (generate basic context only).
+
+4. **Fallback**: Search workspace for `**/context.md` files if script-based analysis fails.
+5. **Synthesize**: Merge PR insights, repo structure, and context.md data into the final report.
+6. **Use in output**: Include "Component Context & Historical PR Analysis" section with:
+   - What the component does, architecture pattern
+   - Key implementation patterns from historic PRs
+   - Relevant PRs with design rationale
+   - Upstream vs downstream differences (if upstream analyzed)
+   - Operand repos and their purpose (if operator)
+   - Risk factors and recommended approach
 
 ## Step 4: Generate EPIC(s)
 
@@ -70,7 +93,7 @@ Note missing sections; still proceed with available content.
 
 ## Step 6: Define Outcomes
 
-- For each story: 1–2 sentence outcome (customer/business value).
+- For each story: 1–2 sentence outcome (business/value delivered).
 - Add epic-level outcome summary.
 
 ## Step 7: Output the Report
@@ -88,8 +111,38 @@ Note missing sections; still proceed with available content.
 | **Business Driver** | ... |
 | **Affected Components** | ... |
 
-## Component Context (from workspace)
-[Only if context.md was loaded]
+## Component Context & Historic PR Analysis
+
+[For each affected component]
+
+### Component: [Component Name]
+
+**Repositories**:
+- Downstream: openshift/[repo-name]
+- Upstream: [upstream-org/repo-name] (if applicable)
+- Operands: [operand repos] (if operator)
+
+**Architecture**: [Operator/CLI/Library/Service]
+
+**Key Implementation Patterns** (from historic PRs):
+1. [Pattern 1 from PR analysis]
+2. [Pattern 2 from PR analysis]
+
+**Relevant Historic PRs**:
+- **PR #[number]** ([date]): [Title]
+  - **Design Insight**: [What was designed and why]
+  - **Scope**: [S/M/L - files changed]
+  - **Relevance**: [Why this matters for current RFE]
+
+**Upstream vs Downstream** (if upstream analyzed):
+- [Key differences in architecture, features, or approach]
+
+**Risk Factors**:
+- [Risks identified from PR analysis and codebase structure]
+- **Mitigation**: [Recommendations]
+
+**Recommended Implementation Approach**:
+- [Based on historic patterns and lessons learned]
 
 ## EPIC(s)
 ### EPIC 1: [Title]

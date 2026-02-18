@@ -13,11 +13,11 @@ oape:analyze-rfe
 
 ## Description
 
-The `oape:analyze-rfe` command analyzes a Request for Enhancement (RFE) from Jira and generates a comprehensive breakdown of Epics, user stories, and their outcomes with technical feasibility assessment. This helps product and engineering teams transform customer-driven RFEs into actionable, well-estimated implementation plans.
+The `oape:analyze-rfe` command analyzes a Request for Enhancement (RFE) from Jira and generates a comprehensive breakdown of Epics, user stories, and their outcomes with technical feasibility assessment. This helps product and engineering teams transform RFEs into actionable, well-estimated implementation plans.
 
 This command is particularly useful for:
 - Breaking down complex RFEs into implementable work items
-- Planning sprints and releases from customer requests with effort estimates
+- Planning sprints and releases from RFE requests with effort estimates
 - Identifying technical risks, dependencies, and blockers early
 - Creating epics and stories that align with RFE scope
 - Understanding the full scope and outcomes of an RFE before implementation
