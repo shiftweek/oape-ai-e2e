@@ -11,6 +11,7 @@ Implementation guidance for `/oape:analyze-rfe`. When invoked, execute the steps
 
 - **Jira**: `JIRA_PERSONAL_TOKEN` set (and optionally `JIRA_URL`, default `https://issues.redhat.com`). If unset, prompt the user and exit.
 - **Input**: RFE key (e.g. `RFE-7841`) or Jira URL. Extract key from URL if needed (e.g. `https://issues.redhat.com/browse/RFE-7841` → `RFE-7841`).
+- **Optional (for Step 3 script-based context)**: GitHub CLI `gh` authenticated (`gh auth login`). Used by `gather_component_context.py` (which calls `github_pr_analyzer.py` and related scripts).
 
 ## Step 1: Fetch the RFE
 
@@ -47,7 +48,12 @@ Note missing sections; still proceed with available content.
 1. Search workspace for `**/context.md` or `**/component-context/**/context.md`.
 2. For components mentioned in the RFE, try to match context files (by component name, aliases, or path).
 3. Read matching files; extract Purpose, Scope, Out of Scope, Key Technical Areas, Related Components.
-4. Use this when generating epics and stories (scope boundaries, key areas, handoffs). If none found, skip this section in the output.
+4. **Optional — rich context via scripts** (when no context files exist or deeper analysis is needed): Run the component-context gatherer from the skill scripts directory. It uses `fetch_rfe` data, **GitHub PR analysis** (`github_pr_analyzer.py`), repo structure, and optional operand discovery. Prerequisites: `gh` CLI authenticated (`gh auth login`). Example (use RFE-derived keywords for the component):
+   ```bash
+   python3 plugins/oape/skills/analyze-rfe/scripts/gather_component_context.py <component-name> --keywords "keyword1" "keyword2" -o .work/jira/analyze-rfe/<rfe-key>/component-context.md
+   ```
+   Use the generated markdown as "Component Context (from workspace)" in the report. If `gh` is not available or the run fails, fall back to file-based context only.
+5. Use this when generating epics and stories (scope boundaries, key areas, handoffs). If none found, skip this section in the output.
 
 ## Step 4: Generate EPIC(s)
 
