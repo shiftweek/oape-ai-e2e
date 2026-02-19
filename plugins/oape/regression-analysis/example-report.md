@@ -415,7 +415,7 @@ It("should automatically migrate caBundle to secretRef", func() {
 
 ## Appendix: Full Diff Summary
 
-```
+```text
  api/v1alpha1/certmanager_types.go              | 15 +++----
  api/v1alpha2/certmanager_types.go              | 142 ++++++++++++++++++
  api/v1alpha2/groupversion_info.go              | 36 +++++

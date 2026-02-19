@@ -548,7 +548,7 @@ It("should handle upgrade from v1alpha1 to v1alpha2", func() {
 
 ## Appendix: Full Diff Summary
 
-```
+```text
 {git diff --stat output}
 ```
 
