@@ -9,8 +9,9 @@ while true; do
     if [ -n "$TOKEN" ]; then
         echo -n "$TOKEN" > "$TOKEN_FILE"
         echo "$(date): Token refreshed successfully"
+        sleep "$REFRESH_INTERVAL"
     else
         echo "$(date): Failed to refresh token"
+        sleep 5
     fi
-    sleep "$REFRESH_INTERVAL"
 done
