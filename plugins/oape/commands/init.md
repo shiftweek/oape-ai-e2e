@@ -105,6 +105,7 @@ I must match the user-provided short name against the allowlist. The allowlist i
   external-secrets          -> https://github.com/openshift/external-secrets
   ztiwm-operator            -> https://github.com/openshift/zero-trust-workload-identity-manager
   ztiwm-spire               -> https://github.com/openshift/spiffe-spire
+  must-gather-operator      -> https://github.com/openshift/must-gather-operator
 
 Matching rules (applied in order):
 1. Exact match (case-insensitive): if the lowercased input exactly equals a short name, use it.
