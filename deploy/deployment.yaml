@@ -19,6 +19,19 @@ spec:
           image: ghcr.io/shiftweek/oape-ai-e2e:latest
           ports:
             - containerPort: 8000
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
           envFrom:
             - configMapRef:
                 name: oape-server-config
@@ -38,6 +51,19 @@ spec:
         - name: ghtoken-sidecar
           image: ghcr.io/shiftweek/oape-ai-e2e:latest
           command: ["/opt/ghtoken/token-refresh.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
           env:
             - name: GH_APP_ID
               value: "3065249" # Replace with GitHub App ID if otherwise
