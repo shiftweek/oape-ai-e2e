@@ -73,7 +73,6 @@ async def list_repos():
             {
                 "short_name": key,
                 "url": info["url"],
-                "base_branch": info["base_branch"],
                 "product": info["product"],
                 "role": info["role"],
             }
@@ -86,6 +85,7 @@ async def list_repos():
 async def submit_workflow_job(
     ep_url: str = Form(...),
     repo: str = Form(...),
+    base_branch: str = Form(...),
 ):
     """Validate inputs, create a workflow background job, and return its ID.
 
@@ -102,6 +102,7 @@ async def submit_workflow_job(
         "mode": "workflow",
         "ep_url": ep_url,
         "repo": repo,
+        "base_branch": base_branch,
         "conversation": [],
         "message_event": asyncio.Condition(),
         "output": "",
@@ -109,7 +110,7 @@ async def submit_workflow_job(
         "error": None,
         "prs": [],
     }
-    asyncio.create_task(_run_workflow_job(job_id, ep_url, repo))
+    asyncio.create_task(_run_workflow_job(job_id, ep_url, repo, base_branch))
     return {"job_id": job_id}
 
 
@@ -183,7 +184,7 @@ async def stream_job(job_id: str):
 
 
 async def _run_workflow_job(
-    job_id: str, ep_url: str, repo: str,
+    job_id: str, ep_url: str, repo: str, base_branch: str,
 ):
     """Run the full workflow in the background and stream messages to the job store."""
     condition = jobs[job_id]["message_event"]
@@ -193,7 +194,7 @@ async def _run_workflow_job(
         jobs[job_id]["conversation"].append(msg)
         loop.create_task(_notify(condition))
 
-    result = await run_workflow(ep_url, repo, on_message=on_message)
+    result = await run_workflow(ep_url, repo, base_branch=base_branch, on_message=on_message)
     if result.success:
         jobs[job_id]["status"] = "success"
         jobs[job_id]["output"] = result.output
@@ -235,6 +236,11 @@ async def api_workflow(
         description="Short name of the target repository "
         "(e.g. cert-manager-operator, external-secrets-operator)",
     ),
+    base_branch: str = Query(
+        ...,
+        description="Base branch to create feature branches from "
+        "(e.g. main, master, release-4.18)",
+    ),
 ):
     """Start the full 3-PR workflow (async, returns job_id)."""
     _validate_ep_url(ep_url)
@@ -245,6 +251,7 @@ async def api_workflow(
         "mode": "workflow",
         "ep_url": ep_url,
         "repo": repo,
+        "base_branch": base_branch,
         "conversation": [],
         "message_event": asyncio.Condition(),
         "output": "",
@@ -252,7 +259,7 @@ async def api_workflow(
         "error": None,
         "prs": [],
     }
-    asyncio.create_task(_run_workflow_job(job_id, ep_url, repo))
+    asyncio.create_task(_run_workflow_job(job_id, ep_url, repo, base_branch))
 
     return {
         "job_id": job_id,
