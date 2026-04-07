@@ -1,6 +1,6 @@
 ---
-description: Clone an allowed OpenShift operator repository by short name into the current directory
-argument-hint: <repo-short-name>
+description: Clone a Git repository by URL into the current directory and checkout the specified base branch
+argument-hint: <git-url> <base-branch>
 ---
 
 ## Name
@@ -8,13 +8,11 @@ oape:init
 
 ## Synopsis
 ```shell
-/oape:init <repo-short-name>
+/oape:init <git-url> <base-branch>
 ```
 
 ## Description
-The `oape:init` command clones an allowed OpenShift operator repository into the current working directory using a short repository name. It uses `git clone --filter=blob:none` for efficient blobless cloning, then changes into the cloned directory so that subsequent `/oape:*` commands work immediately.
-
-The short name is matched case-insensitively against the allowlist of team repositories. Partial matches are supported: if the input uniquely matches one repository it is used automatically; if it matches multiple, all matches are displayed and the user is asked to be more specific.
+The `oape:init` command clones an OpenShift operator git repository into the current working directory using the provided URL. It uses `git clone`, checks out the specified base branch, then changes into the cloned directory so that subsequent `/oape:*` commands work in the cloned directory.
 
 **You MUST follow ALL steps strictly. If any precheck fails, you MUST stop immediately and report the failure.**
 
@@ -24,30 +22,26 @@ The short name is matched case-insensitively against the allowlist of team repos
 
 All prechecks must pass before proceeding. If ANY precheck fails, STOP immediately and report the failure.
 
-#### Precheck 1 — Validate Argument
+#### Precheck 1 — Validate Arguments
 
-The provided argument MUST be a non-empty repository short name.
+Both a git URL and a base branch MUST be provided.
 
 ```bash
-REPO_SHORT_NAME="$ARGUMENTS"
+# Parse arguments: expect "<git-url> <base-branch>"
+GIT_URL=$(echo "$ARGUMENTS" | awk '{print $1}')
+BASE_BRANCH=$(echo "$ARGUMENTS" | awk '{print $2}')
 
-if [ -z "$REPO_SHORT_NAME" ]; then
-  echo "PRECHECK FAILED: No repository short name provided."
-  echo "Usage: /oape:init <repo-short-name>"
+if [ -z "$GIT_URL" ] || [ -z "$BASE_BRANCH" ]; then
+  echo "PRECHECK FAILED: Both a git URL and a base branch are required."
+  echo "Usage: /oape:init <git-url> <base-branch>"
   echo ""
-  echo "Available repositories:"
-  echo "  cert-manager-operator      -- openshift/cert-manager-operator"
-  echo "  jetstack-cert-manager      -- openshift/jetstack-cert-manager"
-  echo "  cert-manager-istio-csr     -- openshift/cert-manager-istio-csr"
-  echo "  external-secrets-operator  -- openshift/external-secrets-operator"
-  echo "  external-secrets           -- openshift/external-secrets"
-  echo "  ztiwm-operator             -- openshift/zero-trust-workload-identity-manager"
-  echo "  ztiwm-spire                -- openshift/spiffe-spire"
-  echo "  must-gather-operator       -- openshift/must-gather-operator"
+  echo "Example:"
+  echo "  /oape:init https://github.com/openshift/cert-manager-operator main"
   exit 1
 fi
 
-echo "Repository short name: $REPO_SHORT_NAME"
+echo "Git URL: $GIT_URL"
+echo "Base branch: $BASE_BRANCH"
 ```
 
 #### Precheck 2 — Verify Required Tools
@@ -74,94 +68,26 @@ echo "Required tools are available."
 
 ---
 
-### Phase 1: Resolve Repository
+### Phase 1: Derive Clone Directory
 
-Match the user-provided short name against the hardcoded allowlist. The allowlist is derived from `team-repos.txt`.
-
-```thinking
-I must match the user-provided short name against the allowlist. The allowlist is:
-
-  cert-manager-operator     -> https://github.com/openshift/cert-manager-operator
-  jetstack-cert-manager     -> https://github.com/openshift/jetstack-cert-manager
-  cert-manager-istio-csr    -> https://github.com/openshift/cert-manager-istio-csr
-  external-secrets-operator -> https://github.com/openshift/external-secrets-operator
-  external-secrets          -> https://github.com/openshift/external-secrets
-  ztiwm-operator            -> https://github.com/openshift/zero-trust-workload-identity-manager
-  ztiwm-spire               -> https://github.com/openshift/spiffe-spire
-  must-gather-operator      -> https://github.com/openshift/must-gather-operator
-
-Matching rules (applied in order):
-1. Exact match (case-insensitive): if the lowercased input exactly equals a short name, use it.
-2. Partial match: if the lowercased input is a substring of one or more short names:
-   a. If exactly one match, use it.
-   b. If multiple matches, list them all and ask the user to choose.
-3. No match: list all available short names and STOP.
-```
+Extract the repository name from the git URL to use as the clone directory name.
 
 ```bash
-# Allowlist: short-name -> clone URL
-declare -A REPO_MAP
-REPO_MAP["cert-manager-operator"]="https://github.com/openshift/cert-manager-operator"
-REPO_MAP["jetstack-cert-manager"]="https://github.com/openshift/jetstack-cert-manager"
-REPO_MAP["cert-manager-istio-csr"]="https://github.com/openshift/cert-manager-istio-csr"
-REPO_MAP["external-secrets-operator"]="https://github.com/openshift/external-secrets-operator"
-REPO_MAP["external-secrets"]="https://github.com/openshift/external-secrets"
-REPO_MAP["ztiwm-operator"]="https://github.com/openshift/zero-trust-workload-identity-manager"
-REPO_MAP["ztiwm-spire"]="https://github.com/openshift/spiffe-spire"
-REPO_MAP["must-gather-operator"]="https://github.com/openshift/must-gather-operator"
+# Extract repo name from URL (strip trailing .git and take the last path component)
+CLONE_DIR=$(basename "$GIT_URL" .git)
+CLONE_URL="$GIT_URL"
 
-INPUT=$(echo "$REPO_SHORT_NAME" | tr '[:upper:]' '[:lower:]')
-
-# Exact match first
-if [ -n "${REPO_MAP[$INPUT]+x}" ]; then
-  CLONE_URL="${REPO_MAP[$INPUT]}"
-  MATCHED_NAME="$INPUT"
-  echo "Exact match: $MATCHED_NAME -> $CLONE_URL"
-else
-  # Partial/substring match
-  MATCHES=()
-  for key in "${!REPO_MAP[@]}"; do
-    if [[ "$key" == *"$INPUT"* ]]; then
-      MATCHES+=("$key")
-    fi
-  done
-
-  if [ ${#MATCHES[@]} -eq 0 ]; then
-    echo "FAILED: No repository matches '$REPO_SHORT_NAME'."
-    echo ""
-    echo "Available repositories:"
-    for key in "${!REPO_MAP[@]}"; do
-      echo "  $key -> ${REPO_MAP[$key]}"
-    done
-    exit 1
-  elif [ ${#MATCHES[@]} -eq 1 ]; then
-    MATCHED_NAME="${MATCHES[0]}"
-    CLONE_URL="${REPO_MAP[$MATCHED_NAME]}"
-    echo "Partial match: $MATCHED_NAME -> $CLONE_URL"
-  else
-    echo "FAILED: Ambiguous short name '$REPO_SHORT_NAME' matches multiple repositories:"
-    echo ""
-    for match in "${MATCHES[@]}"; do
-      echo "  $match -> ${REPO_MAP[$match]}"
-    done
-    echo ""
-    echo "Please provide a more specific name."
-    exit 1
-  fi
-fi
-
-echo "Resolved: $MATCHED_NAME -> $CLONE_URL"
+echo "Clone directory: $CLONE_DIR"
+echo "Clone URL: $CLONE_URL"
 ```
 
 ---
 
 ### Phase 2: Clone Repository
 
-Clone the resolved repository into the current working directory using `git clone --filter=blob:none`. Handle the case where the target directory already exists.
+Clone the repository into the current working directory using `git clone --filter=blob:none`. Handle the case where the target directory already exists.
 
 ```bash
-CLONE_DIR="$MATCHED_NAME"
-
 if [ -d "$CLONE_DIR" ]; then
   echo "Directory '$CLONE_DIR' already exists."
 
@@ -210,12 +136,16 @@ fi
 
 ---
 
-### Phase 3: Change Directory and Verify
+### Phase 3: Change Directory, Checkout Base Branch, and Verify
 
-Change into the cloned repository directory and verify it is a valid Go-based operator repository.
+Change into the cloned repository directory, checkout the specified base branch, and verify it is a valid Go-based operator repository.
 
 ```bash
 cd "$CLONE_DIR" || { echo "FAILED: Cannot change to directory $CLONE_DIR"; exit 1; }
+
+# Checkout the specified base branch
+git checkout "$BASE_BRANCH" || { echo "FAILED: Cannot checkout branch '$BASE_BRANCH'"; exit 1; }
+echo "Checked out branch: $BASE_BRANCH"
 
 # Verify Go module
 if [ -f "go.mod" ]; then
@@ -247,16 +177,12 @@ echo "Current directory: $(pwd)"
 ```text
 === Repository Init Summary ===
 
-Repository:  <matched-name>
+Repository:  <clone-dir>
 Clone URL:   <clone-url>
+Base Branch: <base-branch>
 Local Path:  <absolute-path-to-cloned-dir>
 Go Module:   <module-name>
 Framework:   <controller-runtime | library-go | unknown>
-
-Next Steps:
-  1. Generate API types:       /oape:api-generate <enhancement-pr-url>
-  2. Generate API tests:       /oape:api-generate-tests <path-to-types>
-  3. Generate controller code: /oape:api-implement <enhancement-pr-url>
 ```
 
 ---
@@ -265,12 +191,11 @@ Next Steps:
 
 The command MUST FAIL and STOP immediately if ANY of the following are true:
 
-1. **No argument provided**: No repository short name was given
+1. **Missing arguments**: Git URL or base branch was not provided
 2. **Missing tools**: `git` is not installed
-3. **No match**: The short name does not match any allowed repository
-4. **Ambiguous match**: The short name matches multiple repositories (show them all)
-5. **Clone failed**: The git clone command fails (network, permissions, etc.)
-6. **Directory conflict**: The target directory exists but is not a clone of the expected repository
+3. **Clone failed**: The git clone command fails (network, permissions, etc.)
+4. **Branch checkout failed**: The specified base branch does not exist in the repository
+5. **Directory conflict**: The target directory exists but is not a clone of the expected repository
 
 When failing, provide a clear error message explaining:
 - Which check failed
@@ -279,30 +204,20 @@ When failing, provide a clear error message explaining:
 
 ## Behavioral Rules
 
-1. **Allowlist only**: Only clone repositories from the hardcoded allowlist. Never clone arbitrary URLs.
-2. **Efficient cloning**: Always use `git clone --filter=blob:none` for blobless clones.
-3. **Non-destructive**: Never delete an existing directory automatically. If a directory conflict exists, report it and let the user decide.
-4. **Case-insensitive matching**: Short name matching is case-insensitive.
-5. **Partial match disambiguation**: If a partial match hits multiple repos, list them all and ask the user to be more specific rather than guessing.
-6. **Idempotent**: If the directory already exists and is a clone of the correct repository, use it as-is without re-cloning.
+1. **Efficient cloning**: Always use `git clone --filter=blob:none` for blobless clones.
+2. **Non-destructive**: Never delete an existing directory automatically.
+3. **Idempotent**: If the directory already exists and is a clone of the correct repository, use it as-is without re-cloning.
 
 ## Arguments
 
-- `<repo-short-name>`: The short name of the repository to clone
+- `<git-url>`: The full Git clone URL of the repository
   - Required argument
-  - Case-insensitive
-  - Supports partial matching with disambiguation
-  - Valid short names:
-    - `cert-manager-operator` -- openshift/cert-manager-operator
-    - `jetstack-cert-manager` -- openshift/jetstack-cert-manager
-    - `cert-manager-istio-csr` -- openshift/cert-manager-istio-csr
-    - `external-secrets-operator` -- openshift/external-secrets-operator
-    - `external-secrets` -- openshift/external-secrets
-    - `ztiwm-operator` -- openshift/zero-trust-workload-identity-manager
-    - `ztiwm-spire` -- openshift/spiffe-spire
-    - `must-gather-operator` -- openshift/must-gather-operator
+  - Example: `https://github.com/openshift/cert-manager-operator`
+- `<base-branch>`: The base branch to checkout after cloning
+  - Required argument
+  - Example: `main`, `master`, `release-4.18`
 
 ## Prerequisites
 
 - **git** -- Git installed
-- Access to the `openshift` GitHub organization repositories
+- Access to the target Git repository
