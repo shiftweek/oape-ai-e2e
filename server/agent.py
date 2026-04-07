@@ -47,7 +47,7 @@ def load_team_repos() -> dict[str, dict]:
     """Load team repositories from CSV file.
 
     Returns:
-        dict mapping repo short name to {url, base_branch, product, role}
+        dict mapping repo short name to {url, product, role}
     """
     repos = {}
     with open(TEAM_REPOS_CSV, newline="") as f:
@@ -58,7 +58,6 @@ def load_team_repos() -> dict[str, dict]:
             short_name = url.split("/")[-1]
             repos[short_name] = {
                 "url": url,
-                "base_branch": row["base_branch"],
                 "product": row["product"],
                 "role": row["role"],
             }
@@ -139,7 +138,7 @@ You will create THREE separate Pull Requests, each building on the previous one:
 
 ### PR #1: API Type Definitions
 Branch: `feature/api-types-<ep-number>`
-1. Run `/oape:init {repo_short_name}` to clone the repository
+1. Run `/oape:init {repo_info['url']} {base_branch}` to clone the repository and checkout the base branch
 2. Create and checkout a new branch from `{base_branch}`
 3. Run `/oape:api-generate {ep_url}` to generate API type definitions
 4. Run `/oape:api-generate-tests <path-to-generated-types>` to generate integration tests
@@ -193,6 +192,7 @@ Begin now. Execute PR #1, then immediately PR #2, then immediately PR #3 — all
 async def run_workflow(
     ep_url: str,
     repo_short_name: str,
+    base_branch: str,
     on_message: Callable[[dict], None] | None = None,
 ) -> WorkflowResult:
     """Run the full operator feature development workflow.
@@ -200,6 +200,7 @@ async def run_workflow(
     Args:
         ep_url: The enhancement proposal PR URL.
         repo_short_name: Short name of the target repository.
+        base_branch: The base branch to create feature branches from.
         on_message: Optional callback invoked with each conversation message
             dict as it arrives, enabling real-time streaming.
 
@@ -214,6 +215,9 @@ async def run_workflow(
             error=f"Unknown repository: {repo_short_name}. "
             f"Available: {', '.join(TEAM_REPOS.keys())}",
         )
+
+    # Override the base branch with user-provided value
+    repo_info = {**repo_info, "base_branch": base_branch}
 
     prompt = _build_workflow_prompt(ep_url, repo_short_name, repo_info)
 

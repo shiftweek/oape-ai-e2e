@@ -87,6 +87,13 @@
     </div>
 
     <div class="field-group">
+      <label for="base_branch">Base Branch</label>
+      <input type="text" id="base_branch" name="base_branch"
+             placeholder="e.g. main, master, release-4.18" required>
+      <div class="field-hint">The branch to create feature branches from and target PRs against</div>
+    </div>
+
+    <div class="field-group">
       <label for="ep_url">Enhancement Proposal PR URL</label>
       <input type="text" id="ep_url" name="ep_url"
              placeholder="https://github.com/openshift/enhancements/pull/1234" required>
@@ -113,6 +120,7 @@ const outputEl  = document.getElementById('output');
 const prListEl  = document.getElementById('prList');
 const prItemsEl = document.getElementById('prItems');
 const repoSelect = document.getElementById('repo');
+const baseBranchInput = document.getElementById('base_branch');
 
 // Fetch available repositories on page load, grouped by product
 async function loadRepos() {
@@ -132,7 +140,7 @@ async function loadRepos() {
         repos.forEach(repo => {
           const option = document.createElement('option');
           option.value = repo.short_name;
-          option.textContent = `${repo.short_name} — ${repo.role} (${repo.base_branch})`;
+          option.textContent = `${repo.short_name} — ${repo.role}`;
           optgroup.appendChild(option);
         });
         repoSelect.appendChild(optgroup);
@@ -159,8 +167,9 @@ form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const epUrl = document.getElementById('ep_url').value.trim();
   const repo  = document.getElementById('repo').value;
+  const baseBranch = document.getElementById('base_branch').value.trim();
 
-  if (!epUrl || !repo) return;
+  if (!epUrl || !repo || !baseBranch) return;
 
   btn.disabled = true;
   outputEl.style.display = 'none';
@@ -172,7 +181,7 @@ form.addEventListener('submit', async (e) => {
   statusEl.innerHTML = '<span class="spinner"></span> Submitting workflow job\u2026';
 
   try {
-    const body = new URLSearchParams({ep_url: epUrl, repo: repo});
+    const body = new URLSearchParams({ep_url: epUrl, repo: repo, base_branch: baseBranch});
     const res = await fetch('/submit', {method: 'POST', body});
     if (!res.ok) { throw new Error((await res.json()).detail || res.statusText); }
     const {job_id} = await res.json();

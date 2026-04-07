@@ -13,7 +13,7 @@ This project provides AI-driven tools for end-to-end feature development in Open
 
 | Command                                                          | Purpose                                                        |
 | ---------------------------------------------------------------- | -------------------------------------------------------------- |
-| `/oape:init <repo-short-name>`                                   | Clone an allowed operator repo by short name                   |
+| `/oape:init <git-url> <base-branch>`                             | Clone a Git repository and checkout the base branch            |
 | `/oape:api-generate <EP-URL> [--design-doc <GIST-URL>]`          | Generate Go API types from EP and/or design doc                |
 | `/oape:api-generate-tests <path>`                                | Generate integration test suites for API types                 |
 | `/oape:api-implement <EP-URL> [--design-doc <GIST-URL>]`         | Generate controller code from EP and/or design doc + API types |
@@ -39,7 +39,7 @@ When both sources are provided, the design document takes precedence for impleme
 
 ```bash
 # 1. Clone an operator repository (if not already cloned)
-/oape:init cert-manager-operator
+/oape:init https://github.com/openshift/cert-manager-operator main
 
 # 2. Generate API types (using EP only)
 /oape:api-generate https://github.com/openshift/enhancements/pull/XXXX
