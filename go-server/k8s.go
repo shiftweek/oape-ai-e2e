@@ -154,7 +154,8 @@ func (c *K8sClient) CreateWorkflowJob(ctx context.Context, jobID string, params 
 								},
 								{
 									Name:      "config",
-									MountPath: "/config",
+									MountPath: "/config/config.json",
+									SubPath:   "config.json",
 									ReadOnly:  true,
 								},
 							},

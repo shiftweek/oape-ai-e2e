@@ -75,7 +75,7 @@ func LoadConfig() (*ServerConfig, error) {
 		WorkerEnvConfigMap: envOrDefault("WORKER_ENV_CONFIGMAP", "shift-worker-config"),
 		GCloudSecretName:   envOrDefault("GCLOUD_SECRET_NAME", "gcloud-adc"),
 		GHTokenServiceURL:  envOrDefault("GH_TOKEN_SERVICE_URL", "http://localhost:8081"),
-		ConfigsConfigMap:   envOrDefault("CONFIGS_CONFIGMAP", "shift-server-config"),
+		ConfigsConfigMap:   envOrDefault("CONFIGS_CONFIGMAP", "shift-worker-config"),
 		TeamRepos:          repos,
 	}, nil
 }

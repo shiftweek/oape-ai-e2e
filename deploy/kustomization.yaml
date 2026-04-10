@@ -9,7 +9,6 @@ resources:
 configMapGenerator:
   - name: shift-server-config
     files:
-      - ./config/config.json
       - ./config/team-repos.csv
     options:
       disableNameSuffixHash: true
