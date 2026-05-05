@@ -67,7 +67,7 @@ func LoadConfig() (*ServerConfig, error) {
 	}
 
 	return &ServerConfig{
-		WorkerImage:        envOrDefault("WORKER_IMAGE", "ghcr.io/openshift-eng/oape-ai-e2e:latest"),
+		WorkerImage:        envOrDefault("WORKER_IMAGE", "quay.io/openshift-oap/ai-agent:latest"), // :) fictional placeholder
 		JobNamespace:       namespace,
 		TTLAfterFinished:   ttl,
 		ListenAddr:         envOrDefault("LISTEN_ADDR", ":8080"),
