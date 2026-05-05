@@ -215,13 +215,16 @@ Automatically applies code fixes from a review report.
 
 ## Deployment
 
-Deploy the Python web server to run as a container or as a pod on a Kubernetes cluster. The web traffic port on the container is 8000.
-
-### Build the container image
+### Build the container images
 
 ```shell
-podman build -t ghcr.io/openshift-eng/oape-ai-e2e:latest .
-podman push ghcr.io/openshift-eng/oape-ai-e2e:latest
+podman build -t quay.io/your-username/oape-ai:agent-worker -f images/agent-worker.Dockerfile .
+podman build -t quay.io/your-username/oape-ai:gh-token-minter -f images/gh-token-minter.Dockerfile .
+podman build -t quay.io/your-username/oape-ai:go-server -f images/go-server.Dockerfile .
+
+podman push quay.io/your-username/oape-ai:agent-worker
+podman push quay.io/your-username/oape-ai:gh-token-minter
+podman push quay.io/your-username/oape-ai:go-server
 ```
 
 ### Configure the deployment
